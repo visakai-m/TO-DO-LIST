@@ -1,0 +1,208 @@
+#include <windows.h>
+#include <stdio.h>
+#include <string.h>
+
+#define ADD_BUTTON 1
+#define TASK_INPUT 2
+#define TASK_LIST 3
+#define DELETE_BUTTON 4
+#define COMPLETE_BUTTON 5
+
+HWND input, list;
+
+// Save tasks into a file
+void saveTasks()
+{
+    FILE *fp = fopen("tasks.txt", "w");
+
+    if (fp == NULL)
+        return;
+
+    int count = SendMessageA(list, LB_GETCOUNT, 0, 0);
+
+    char task[200];
+
+    for (int i = 0; i < count; i++)
+    {
+        SendMessageA(list, LB_GETTEXT, i, (LPARAM)task);
+        fprintf(fp, "%s\n", task);
+    }
+
+    fclose(fp);
+}
+
+// Load tasks from the file
+void loadTasks()
+{
+    FILE *fp = fopen("tasks.txt", "r");
+
+    if (fp == NULL)
+        return;
+
+    char task[200];
+
+    while (fgets(task, sizeof(task), fp))
+    {
+        task[strcspn(task, "\n")] = '\0';
+
+        if (strlen(task) > 0)
+        {
+            SendMessageA(list, LB_ADDSTRING, 0, (LPARAM)task);
+        }
+    }
+
+    fclose(fp);
+}
+
+LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT msg,
+                                 WPARAM wp, LPARAM lp)
+{
+    switch (msg)
+    {
+        case WM_CREATE:
+
+            input = CreateWindowA(
+                "EDIT", "",
+                WS_CHILD | WS_VISIBLE | WS_BORDER,
+                30, 30, 250, 30,
+                hwnd, (HMENU)TASK_INPUT, NULL, NULL);
+
+            CreateWindowA(
+                "BUTTON", "Add Task",
+                WS_CHILD | WS_VISIBLE,
+                300, 30, 100, 30,
+                hwnd, (HMENU)ADD_BUTTON, NULL, NULL);
+
+            list = CreateWindowA(
+                "LISTBOX", "",
+                WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL,
+                30, 80, 370, 200,
+                hwnd, (HMENU)TASK_LIST, NULL, NULL);
+
+            CreateWindowA(
+                "BUTTON", "Delete Task",
+                WS_CHILD | WS_VISIBLE,
+                30, 300, 120, 35,
+                hwnd, (HMENU)DELETE_BUTTON, NULL, NULL);
+
+            CreateWindowA(
+                "BUTTON", "Complete Task",
+                WS_CHILD | WS_VISIBLE,
+                170, 300, 140, 35,
+                hwnd, (HMENU)COMPLETE_BUTTON, NULL, NULL);
+
+            loadTasks();
+
+            break;
+
+        case WM_COMMAND:
+
+            if (LOWORD(wp) == ADD_BUTTON)
+            {
+                char task[200];
+
+                GetWindowTextA(input, task, 200);
+
+                if (strlen(task) > 0)
+                {
+                    SendMessageA(list, LB_ADDSTRING,
+                                 0, (LPARAM)task);
+
+                    SetWindowTextA(input, "");
+
+                    saveTasks();
+                }
+            }
+
+            if (LOWORD(wp) == DELETE_BUTTON)
+            {
+                int selected;
+
+                selected = SendMessageA(
+                    list, LB_GETCURSEL, 0, 0);
+
+                if (selected != LB_ERR)
+                {
+                    SendMessageA(list, LB_DELETESTRING,
+                                 selected, 0);
+
+                    saveTasks();
+                }
+            }
+
+            if (LOWORD(wp) == COMPLETE_BUTTON)
+            {
+                int selected;
+                char task[200];
+                char completed[220];
+
+                selected = SendMessageA(
+                    list, LB_GETCURSEL, 0, 0);
+
+                if (selected != LB_ERR)
+                {
+                    SendMessageA(list, LB_GETTEXT,
+                                 selected, (LPARAM)task);
+
+                    if (strncmp(task, "[DONE] ", 7) != 0)
+                    {
+                        sprintf(completed, "[DONE] %s", task);
+
+                        SendMessageA(list, LB_DELETESTRING,
+                                     selected, 0);
+
+                        SendMessageA(list, LB_INSERTSTRING,
+                                     selected, (LPARAM)completed);
+
+                        SendMessageA(list, LB_SETCURSEL,
+                                     selected, 0);
+
+                        saveTasks();
+                    }
+                }
+            }
+
+            break;
+
+        case WM_DESTROY:
+            saveTasks();
+            PostQuitMessage(0);
+            break;
+
+        default:
+            return DefWindowProcA(hwnd, msg, wp, lp);
+    }
+
+    return 0;
+}
+
+int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev,
+                   LPSTR args, int nCmdShow)
+{
+    WNDCLASSA wc = {0};
+
+    wc.hInstance = hInst;
+    wc.lpszClassName = "TodoWindow";
+    wc.lpfnWndProc = WindowProcedure;
+    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+
+    RegisterClassA(&wc);
+
+    HWND hwnd = CreateWindowA(
+        "TodoWindow", "My To-Do List",
+        WS_OVERLAPPEDWINDOW,
+        200, 100, 470, 420,
+        NULL, NULL, hInst, NULL);
+
+    ShowWindow(hwnd, nCmdShow);
+
+    MSG msg;
+
+    while (GetMessageA(&msg, NULL, 0, 0))
+    {
+        TranslateMessage(&msg);
+        DispatchMessageA(&msg);
+    }
+
+    return 0;
+}
